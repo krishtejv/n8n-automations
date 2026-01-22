@@ -1,0 +1,628 @@
+{
+  "name": "LinkedIn Outreach Agent v2 (Fixed)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "310683e0-ae21-4926-897e-70819bc3d5f7",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2976,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "chatInput",
+              "name": "chatInput",
+              "value": "Find Site Reliability Engineers at Apple in NYC",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11e2a108-b76e-4722-9b2d-f11e1a368401",
+      "name": "Set Chat Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2784,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a Boolean Search expert. Convert the user's request into a Google Boolean Search string to find LinkedIn profiles. Return ONLY the search string, nothing else. Example: site:linkedin.com/in/ \\\"Product Manager\\\" \\\"Snap\\\" \\\"New York\\\"\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.chatInput }}\"\n    }\n  ],\n  \"temperature\": 0.3\n}",
+        "options": {}
+      },
+      "id": "d672f330-7e6b-4458-a135-ba8cc0dba440",
+      "name": "OpenAI - Generate Boolean",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2560,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "={{ $env.SERPER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ q: $json.choices[0].message.content, num: 10 }) }}",
+        "options": {}
+      },
+      "id": "8763f766-0abf-4c0b-be3d-e41a324b94b6",
+      "name": "Serper - Google Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2336,
+        640
+      ],
+      "notes": "Replaces fragile scraping"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "organic",
+        "options": {}
+      },
+      "id": "0356dea5-fc37-47b1-974f-b659df8166e3",
+      "name": "Loop Over Results",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -2160,
+        640
+      ],
+      "notes": "Process each search result"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Analyze this LinkedIn search result snippet. Extract: firstName, lastName, role, company. Determine if this person matches a search for LinkedIn professionals. Return ONLY valid JSON: {\\\"firstName\\\": \\\"...\\\", \\\"lastName\\\": \\\"...\\\", \\\"role\\\": \\\"...\\\", \\\"company\\\": \\\"...\\\", \\\"isMatch\\\": true/false, \\\"reason\\\": \\\"...\\\"}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Title: {{ $json.title }}\\nSnippet: {{ $json.snippet }}\\nLink: {{ $json.link }}\"\n    }\n  ],\n  \"temperature\": 0.2,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "id": "ec7d78f4-094e-49f9-a737-02269f530cc2",
+      "name": "OpenAI - Verify & Extract",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1968,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the OpenAI response and extract the JSON\nconst content = $input.first().json.choices[0].message.content;\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { isMatch: false, reason: 'Failed to parse response' };\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "6f3f5944-235c-49f8-9c47-60905187c5be",
+      "name": "Parse OpenAI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1776,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "match-check",
+              "leftValue": "={{ $json.isMatch }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d45c3879-954e-4960-a8bd-605f24035b8e",
+      "name": "Is Good Match?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1584,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean company name to create a valid domain\nconst company = $json.company || '';\n// Remove common suffixes and clean\nlet domain = company\n  .replace(/\\s*(Inc\\.?|LLC|Corp\\.?|Corporation|Co\\.?|Ltd\\.?|Limited|Company)\\s*$/i, '')\n  .trim()\n  .toLowerCase()\n  .replace(/[^a-z0-9]/g, '');\n\nreturn [{\n  json: {\n    ...$json,\n    cleanDomain: domain + '.com'\n  }\n}];"
+      },
+      "id": "18ab8dd3-e95e-493b-8d60-db060432df3d",
+      "name": "Clean Company Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1424,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hunter.io/v2/email-finder?domain={{ $json.cleanDomain }}&first_name={{ $json.firstName }}&last_name={{ $json.lastName }}&api_key={{ $env.HUNTER_API_KEY }}",
+        "options": {}
+      },
+      "id": "484a82fe-cf7f-479b-92f9-4a11b805823a",
+      "name": "Hunter - Find Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1232,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "email-check",
+              "leftValue": "={{ $json.data.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5a3769e1-0812-4764-b3bf-2a4726b61eeb",
+      "name": "Email Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Write a short, personalized cold email to this person. Mention their role and company. Keep it professional. This is a DRAFT for review.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Name: {{ $('Parse OpenAI Response').item.json.firstName }} {{ $('Parse OpenAI Response').item.json.lastName }}\\nRole: {{ $('Parse OpenAI Response').item.json.role }}\\nCompany: {{ $('Parse OpenAI Response').item.json.company }}\\nEmail: {{ $json.data.email }}\"\n    }\n  ],\n  \"temperature\": 0.7\n}",
+        "options": {}
+      },
+      "id": "f258c165-9f74-4676-bcaa-152d98eee3c7",
+      "name": "OpenAI - Write Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -880,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fn",
+              "name": "firstName",
+              "value": "={{ $('Parse OpenAI Response').item.json.firstName }}",
+              "type": "string"
+            },
+            {
+              "id": "ln",
+              "name": "lastName",
+              "value": "={{ $('Parse OpenAI Response').item.json.lastName }}",
+              "type": "string"
+            },
+            {
+              "id": "role",
+              "name": "role",
+              "value": "={{ $('Parse OpenAI Response').item.json.role }}",
+              "type": "string"
+            },
+            {
+              "id": "company",
+              "name": "company",
+              "value": "={{ $('Parse OpenAI Response').item.json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "email",
+              "name": "email",
+              "value": "={{ $('Hunter - Find Email').item.json.data.email }}",
+              "type": "string"
+            },
+            {
+              "id": "draft",
+              "name": "emailDraft",
+              "value": "={{ $json.choices[0].message.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "636b389f-54f7-4333-81f3-02514db1e87d",
+      "name": "Prepare Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -672,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "firstName": "={{ $json.firstName }}",
+            "lastName": "={{ $json.lastName }}",
+            "role": "={{ $json.role }}",
+            "company": "={{ $json.company }}",
+            "email": "={{ $json.email }}",
+            "emailDraft": "={{ $json.emailDraft }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "emailDraft",
+              "displayName": "emailDraft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cc8f8cee-3bdc-4c04-9b44-5cfe2af18631",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -480,
+        528
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oV6IY6Qkx7mQ6iRR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "5704dfd2-f469-4a0b-9fe9-729d647e2c6a",
+      "name": "Discard (No Match)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        784
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "eee9f98e-3350-445a-a466-e9ea7af4b6a5",
+      "name": "Discard (No Email)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        784
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Chat Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Chat Input": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Generate Boolean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Generate Boolean": {
+      "main": [
+        [
+          {
+            "node": "Serper - Google Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serper - Google Search": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Results": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Verify & Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Verify & Extract": {
+      "main": [
+        [
+          {
+            "node": "Parse OpenAI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse OpenAI Response": {
+      "main": [
+        [
+          {
+            "node": "Is Good Match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Good Match?": {
+      "main": [
+        [
+          {
+            "node": "Clean Company Domain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discard (No Match)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Company Domain": {
+      "main": [
+        [
+          {
+            "node": "Hunter - Find Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter - Find Email": {
+      "main": [
+        [
+          {
+            "node": "Email Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Found?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Write Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discard (No Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Write Draft": {
+      "main": [
+        [
+          {
+            "node": "Prepare Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Output": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7ebf455a-5b31-4f95-a0f9-ca151f1e28cf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7debf0bc90176f2e22711355bef2df75fc2ba45c9f5a457059ea24ce0c852749"
+  },
+  "id": "NecTp4zgiaJjlVuy",
+  "tags": []
+}

@@ -1,0 +1,28 @@
+# Environment variables (contains API keys!)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# n8n data (if running locally)
+.n8n/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
